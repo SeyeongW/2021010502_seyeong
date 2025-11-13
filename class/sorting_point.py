@@ -35,9 +35,6 @@ try:
         #    (In this SU2 setup, the sign of Points_2 indicates which side of the section the point lies on.)
         df_upper = df_processed[df_processed['Points_2'] >= 0].copy()
         df_lower = df_processed[df_processed['Points_2'] < 0].copy()
-        
-        print(f"Number of upper surface points: {len(df_upper)}")
-        print(f"Number of lower surface points: {len(df_lower)}")
 
         # 6. Sort upper surface points in ascending x (from LE to TE)
         #    Pressure_Coefficient moves along with the normalized x-coordinate
