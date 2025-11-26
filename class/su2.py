@@ -1,80 +1,119 @@
 import pandas as pd
 import numpy as np
+import time
+import sys
 
 try:
-    # 1. CSV 파일 로드
-    df = pd.read_csv("su2_0.5.csv")
-    print("파일 로드 성공.")
-
-    # 2. 회전 보정을 위한 LE/TE 찾기
-    id_max = df['Points_1'].idxmax()
-    id_min = df['Points_1'].idxmin()
-
-    p_max = df.loc[id_max, ['Points_1', 'Points_0']].values
-    p_min = df.loc[id_min, ['Points_1', 'Points_0']].values
-
-    # 3. 회전 각도(Theta) 계산 및 보정
-    # (데이터가 기울어져 있을 수 있으므로 수평으로 눕혀줍니다)
-    dx = p_max[0] - p_min[0]
-    dy = p_max[1] - p_min[1]
-    theta = np.arctan2(dy, dx)
+    # ==============================================================================
+    # [사용자 설정]
+    # ==============================================================================
+    FLIP_AXIS = True  # 코(LE)=1, 꼬리(TE)=0 (반대)
     
-    cos_t = np.cos(-theta)
-    sin_t = np.sin(-theta)
-
-    x = df['Points_1'].values
-    y = df['Points_0'].values
-
-    # 회전된 좌표
-    df['x_rot'] = x * cos_t - y * sin_t
-    df['y_rot'] = x * sin_t + y * cos_t
-
-    # 4. [핵심 수정] 정규화 방향 반전 (Flip)
-    # 이전: 최대값이 0 (Max -> Min 방향)
-    # 수정: 최소값이 0 (Min -> Max 방향) -> 그래프 좌우 반전 해결
-    max_x_rot = df['x_rot'].max()
-    min_x_rot = df['x_rot'].min()
-    chord_len = max_x_rot - min_x_rot
+    # 물리 상수
+    P_inf = 101325.0
+    T_inf = 288.15
+    Blade_Radius = 1.14322
+    Section_Ratio = 0.5
+    RPM = 2500
+    rho = 1.225
+    Input_File = f'{Section_Ratio}.csv'
+    output_filename = f'CT_Blade_rR{Section_Ratio}.xlsx'
     
-    # 최소값(Min) 지점이 앞전(0)이 되도록 설정
-    df['x_c'] = (df['x_rot'] - min_x_rot) / chord_len
-
-    # 5. 윗면/아랫면 자동 감지 (압력 기준)
-    # 일단 y_rot 평균을 기준으로 그룹을 나눕니다.
-    y_mean = df['y_rot'].mean()
+    # ==============================================================================
+    # [계산 시작]
+    # ==============================================================================
     
-    group_A = df[df['y_rot'] < y_mean].copy()
-    group_B = df[df['y_rot'] >= y_mean].copy()
+    df = pd.read_csv(Input_File)
+    
+    Omega = RPM * (2 * np.pi) / 60
+    r_local = Blade_Radius * Section_Ratio
+    v_local = r_local * Omega
+    q_inf = 0.5 * rho * (v_local ** 2)
 
-    # 물리 법칙 적용: 평균 압력계수(Cp)가 더 낮은(음수 쪽) 그룹이 '윗면(Upper)'입니다.
-    mean_cp_A = group_A['Pressure_Coefficient'].mean()
-    mean_cp_B = group_B['Pressure_Coefficient'].mean()
+    print(f">>> 총 {len(df)}개 포인트에 대한 Cp 계산을 시작합니다...\n")
+    print(f"{'ID':<5} | {'Pressure (Pa)':<15} | {'Calculated Cp':<15}")
+    print("-" * 45)
+    
+    cp_list = []
+    
+    for index, row in df.iterrows():
+        pressure = row['Pressure']
+        cp = (pressure - P_inf) / q_inf
+        cp_list.append(cp)
+        
+        print(f"{index:<5} | {pressure:<15.2f} | {cp:<15.4f}")
+        time.sleep(0.005) 
 
-    if mean_cp_A < mean_cp_B:
+    df['Cp_Calculated'] = cp_list
+    print("-" * 45)
+    print(">>> Cp 계산 완료.\n")
+
+    # ==============================================================================
+    # [형상 정렬 및 저장] (출력 최소화)
+    # ==============================================================================
+    print(">>> 형상 정렬 및 파일 저장 중...", end="")
+    
+    idx_stag = df['Pressure'].idxmax()
+    le_x = df.loc[idx_stag, 'Points_1']
+    le_y = df.loc[idx_stag, 'Points_0']
+
+    df['x_trans'] = df['Points_1'] - le_x
+    df['y_trans'] = df['Points_0'] - le_y
+
+    df['dist'] = np.sqrt(df['x_trans']**2 + df['y_trans']**2)
+    idx_te = df['dist'].idxmax()
+    
+    te_x = df.loc[idx_te, 'x_trans']
+    te_y = df.loc[idx_te, 'y_trans']
+
+    angle = np.arctan2(te_y, te_x)
+    cos_a = np.cos(-angle)
+    sin_a = np.sin(-angle)
+
+    x = df['x_trans'].values
+    y = df['y_trans'].values
+
+    df['x_rot'] = x * cos_a - y * sin_a
+    df['y_rot'] = x * sin_a + y * cos_a
+
+    chord_len = df.loc[idx_te, 'x_rot']
+    df['x_c'] = df['x_rot'] / chord_len
+    
+    if FLIP_AXIS:
+        df['x_c'] = 1.0 - df['x_c']
+
+    group_A = df[df['y_rot'] <= 0].copy()
+    group_B = df[df['y_rot'] > 0].copy()
+
+    if group_A['Cp_Calculated'].mean() < group_B['Cp_Calculated'].mean():
         df_upper = group_A
         df_lower = group_B
-        print("감지됨: Y좌표가 작은 쪽이 윗면(Upper)")
     else:
         df_upper = group_B
         df_lower = group_A
-        print("감지됨: Y좌표가 큰 쪽이 윗면(Upper)")
 
-    # 6. 정렬 및 저장 (그래프 그리기 좋게 정렬)
-    # 윗면: 앞전(0) -> 뒷전(1)
-    upper_sorted = df_upper[['x_c', 'Pressure_Coefficient']].sort_values(by='x_c', ascending=True)
-    upper_sorted['Surface'] = 'Upper'
+    te_row = df.loc[idx_te].copy()
+    if idx_te not in df_upper.index:
+        df_upper = pd.concat([df_upper, te_row.to_frame().T])
+    if idx_te not in df_lower.index:
+        df_lower = pd.concat([df_lower, te_row.to_frame().T])
 
-    # 아랫면: 뒷전(1) -> 앞전(0) (루프 형태 유지를 위해 역순 정렬 추천, 필요시 ascending=True로 변경 가능)
-    lower_sorted = df_lower[['x_c', 'Pressure_Coefficient']].sort_values(by='x_c', ascending=False)
-    lower_sorted['Surface'] = 'Lower'
+    upper_sorted = df_upper.sort_values(by='x_c', ascending=True)
+    lower_sorted = df_lower.sort_values(by='x_c', ascending=False)
+    
+    cols = ['x_c', 'Cp_Calculated']
+    upper_final = upper_sorted[cols].copy()
+    upper_final.columns = ['x_c', 'Pressure_Coefficient']
+    upper_final['Surface'] = 'Upper'
+    
+    lower_final = lower_sorted[cols].copy()
+    lower_final.columns = ['x_c', 'Pressure_Coefficient']
+    lower_final['Surface'] = 'Lower'
 
-    combined_data = pd.concat([upper_sorted, lower_sorted])
-    combined_data.to_excel('CT_Blade_0.5_Reversed_Final.xlsx', index=False)
-
-    print("\n[완료] 앞뒤 반전 및 상하 분리 보정 완료.")
-    print("'CT_Blade_0.5_Reversed_Final.xlsx' 파일로 저장되었습니다.")
-    print("\n[데이터 미리보기 - 윗면 앞부분]")
-    print(combined_data.head())
+    combined_data = pd.concat([upper_final, lower_final])
+    combined_data.to_excel(output_filename, index=False)
+    
+    print(f" 완료!\n>>> 파일명: '{output_filename}'")
 
 except Exception as e:
     print(f"오류 발생: {e}")
