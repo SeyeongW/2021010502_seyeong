@@ -1,0 +1,163 @@
+
+-------------------------------------------------------------------------
+|    ___ _   _ ___                                                      |
+|   / __| | | |_  )   Release 8.3.0 "Harrier"                           |
+|   \__ \ |_| |/ /                                                      |
+|   |___/\___//___|   Suite (Mesh Deformation Code)                     |
+|                                                                       |
+-------------------------------------------------------------------------
+| SU2 Project Website: https://su2code.github.io                        |
+|                                                                       |
+| The SU2 Project is maintained by the SU2 Foundation                   |
+| (http://su2foundation.org)                                            |
+-------------------------------------------------------------------------
+| Copyright 2012-2025, SU2 Contributors                                 |
+|                                                                       |
+| SU2 is free software; you can redistribute it and/or                  |
+| modify it under the terms of the GNU Lesser General Public            |
+| License as published by the Free Software Foundation; either          |
+| version 2.1 of the License, or (at your option) any later version.    |
+|                                                                       |
+| SU2 is distributed in the hope that it will be useful,                |
+| but WITHOUT ANY WARRANTY; without even the implied warranty of        |
+| MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU      |
+| Lesser General Public License for more details.                       |
+|                                                                       |
+| You should have received a copy of the GNU Lesser General Public      |
+| License along with SU2. If not, see <http://www.gnu.org/licenses/>.   |
+-------------------------------------------------------------------------
+
+----------------- Physical Case Definition ( Zone 0 ) -------------------
+Input mesh file name: mesh_NACA0012_inv.su2
+
+---------------- Grid deformation parameters ( Zone 0 )  ----------------
+Grid deformation using linear elasticity method.
+Design variables definition (markers <-> value <-> param):
+Hicks Henne <-> airfoil <-> 1.1458e-05 <-> ( 0, 0.05 )
+Hicks Henne <-> airfoil <-> 6.95369e-06 <-> ( 0, 0.1 )
+Hicks Henne <-> airfoil <-> 2.92682e-06 <-> ( 0, 0.15 )
+Hicks Henne <-> airfoil <-> -1.34398e-08 <-> ( 0, 0.2 )
+Hicks Henne <-> airfoil <-> -1.69618e-06 <-> ( 0, 0.25 )
+Hicks Henne <-> airfoil <-> -2.13139e-06 <-> ( 0, 0.3 )
+Hicks Henne <-> airfoil <-> -1.49354e-06 <-> ( 0, 0.35 )
+Hicks Henne <-> airfoil <-> -1.23194e-07 <-> ( 0, 0.4 )
+Hicks Henne <-> airfoil <-> 1.51006e-06 <-> ( 0, 0.45 )
+Hicks Henne <-> airfoil <-> 2.90426e-06 <-> ( 0, 0.5 )
+Hicks Henne <-> airfoil <-> 3.67139e-06 <-> ( 0, 0.55 )
+Hicks Henne <-> airfoil <-> 3.68453e-06 <-> ( 0, 0.6 )
+Hicks Henne <-> airfoil <-> 3.14388e-06 <-> ( 0, 0.65 )
+Hicks Henne <-> airfoil <-> 2.48346e-06 <-> ( 0, 0.7 )
+Hicks Henne <-> airfoil <-> 2.12037e-06 <-> ( 0, 0.75 )
+Hicks Henne <-> airfoil <-> 2.20217e-06 <-> ( 0, 0.8 )
+Hicks Henne <-> airfoil <-> 2.60737e-06 <-> ( 0, 0.85 )
+Hicks Henne <-> airfoil <-> 3.23201e-06 <-> ( 0, 0.9 )
+Hicks Henne <-> airfoil <-> 4.45753e-06 <-> ( 0, 0.95 )
+Hicks Henne <-> airfoil <-> 4.55388e-06 <-> ( 1, 0.05 )
+Hicks Henne <-> airfoil <-> -2.43619e-06 <-> ( 1, 0.1 )
+Hicks Henne <-> airfoil <-> -4.0351e-06 <-> ( 1, 0.15 )
+Hicks Henne <-> airfoil <-> -3.28805e-06 <-> ( 1, 0.2 )
+Hicks Henne <-> airfoil <-> -1.75406e-06 <-> ( 1, 0.25 )
+Hicks Henne <-> airfoil <-> -2.14255e-07 <-> ( 1, 0.3 )
+Hicks Henne <-> airfoil <-> 1.00211e-06 <-> ( 1, 0.35 )
+Hicks Henne <-> airfoil <-> 1.8213e-06 <-> ( 1, 0.4 )
+Hicks Henne <-> airfoil <-> 2.28196e-06 <-> ( 1, 0.45 )
+Hicks Henne <-> airfoil <-> 2.42879e-06 <-> ( 1, 0.5 )
+Hicks Henne <-> airfoil <-> 2.25532e-06 <-> ( 1, 0.55 )
+Hicks Henne <-> airfoil <-> 1.71789e-06 <-> ( 1, 0.6 )
+Hicks Henne <-> airfoil <-> 8.20269e-07 <-> ( 1, 0.65 )
+Hicks Henne <-> airfoil <-> -2.90524e-07 <-> ( 1, 0.7 )
+Hicks Henne <-> airfoil <-> -1.33258e-06 <-> ( 1, 0.75 )
+Hicks Henne <-> airfoil <-> -2.06195e-06 <-> ( 1, 0.8 )
+Hicks Henne <-> airfoil <-> -2.46985e-06 <-> ( 1, 0.85 )
+Hicks Henne <-> airfoil <-> -2.82831e-06 <-> ( 1, 0.9 )
+Hicks Henne <-> airfoil <-> -3.8547e-06 <-> ( 1, 0.95 )
+
+-------------------- Output Information ( Zone 0 ) ----------------------
+Output mesh file name: mesh_NACA0012_inv_deform.su2. 
+Cell stiffness scaled by inverse of the cell volume.
+
+------------- Config File Boundary Information ( Zone 0 ) ---------------
++-----------------------------------------------------------------------+
+|                        Marker Type|                        Marker Name|
++-----------------------------------------------------------------------+
+|                         Euler wall|                            airfoil|
++-----------------------------------------------------------------------+
+|                          Far-field|                           farfield|
++-----------------------------------------------------------------------+
+Two dimensional problem.
+5233 grid points.
+10216 volume elements.
+2 surface markers.
+200 boundary elements in index 0 (Marker = airfoil).
+50 boundary elements in index 1 (Marker = farfield).
+10216 triangles.
+
+----------------------- Preprocessing computations ----------------------
+Setting local point connectivity.
+Checking the numerical grid orientation of the interior elements.
+All volume elements are correctly oriented.
+All surface elements are correctly oriented.
+Identify edges and vertices.
+Setting the bound control volume structure.
+Area of the computational grid: 1253.25.
+  Info: Ignoring the following volume output fields/groups:
+  SOLUTION
+Volume output fields: COORDINATES
+  Info: Ignoring the following screen output fields:
+  RMS_DENSITY, RMS_ENERGY, LIFT, DRAG
+Screen output fields: INNER_ITER
+  Info: Ignoring the following history output groups:
+  RMS_RES, AERO_COEFF
+History output group(s): ITER
+Warning: No (valid) fields chosen for convergence monitoring. Convergence monitoring inactive.
+Warning: No (valid) fields chosen for time convergence monitoring. Time convergence monitoring inactive.
+
+--------------------- Surface grid deformation (ZONE 0) -----------------
+Performing the deformation of the surface grid.
+
+------------------- Volumetric grid deformation (ZONE 0) ----------------
+Performing the deformation of the volumetric grid.
+Computing volumes of the grid elements.
+Min. volume: 4.14044e-08, max. volume: 4.10267.
+
+# FGMRES residual history
+# Residual tolerance target = 1e-14
+# Initial residual norm     = 0.0112034
+     0     1
+     10     0.00546612
+     20     0.00293159
+     30     0.000359938
+     40     7.14059e-05
+     50     6.43169e-06
+     60     1.41084e-07
+     70     1.86035e-09
+     80     1.18193e-10
+     90     1.11416e-11
+     100     3.76448e-13
+     110     2.7438e-14
+# FGMRES final (true) residual:
+# Iteration = 113: |res|/|res0| = 9.53879e-15.
+
+Computing volumes of the grid elements.
+Non-linear iter.: 1/1. Linear iter.: 113. Min. area: 4.22435e-08. Error: 9.53879e-15.
+
+Completed in 0.238667 seconds on 1 core.
+
+----------------------- Write deformed grid files -----------------------
+|SU2 mesh                           |mesh_NACA0012_inv_deform.su2       |
+|Paraview                           |volume_deformed.vtu                |
+|Paraview surface                   |surface_deformed.vtu               |
+|CSV file                           |surface_deformed.csv               |
+Adding any FFD information to the SU2 file.
+
+------------------------- Finalize Solver -------------------------
+Deleted CNumerics container.
+Deleted CSolver container.
+Deleted CGeometry container.
+Deleted CSurfaceMovement class.
+Deleted CVolumetricMovement class.
+Deleted CConfig container.
+Deleted COutput class.
+
+------------------------- Exit Success (SU2_DEF) ------------------------
+
