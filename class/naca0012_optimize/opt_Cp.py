@@ -94,13 +94,14 @@ if data_init is not None and data_opt is not None:
     ax1.plot(data_init['x_up'], data_init['cp_up'], 'k--', linewidth=1.5)
     ax1.plot(data_init['x_low'], data_init['cp_low'], 'k--', linewidth=1.5)
     
-    # Plot Optimized
-    ax1.plot(data_opt['x_up'], data_opt['cp_up'], 'g-', linewidth=2)
-    ax1.plot(data_opt['x_low'], data_opt['cp_low'], 'g-', linewidth=2)
+    # Plot Optimized (CHANGED COLOR HERE)
+    # 'g-'를 color='hotpink', linestyle='-' 로 변경했습니다.
+    ax1.plot(data_opt['x_up'], data_opt['cp_up'], color='hotpink', linestyle='-', linewidth=2)
+    ax1.plot(data_opt['x_low'], data_opt['cp_low'], color='hotpink', linestyle='-', linewidth=2)
 
     # Settings for Cp plot
-    ax1.set_ylabel("Pressure Coefficient ($C_p$)", fontsize=14, fontweight='bold')
-    ax1.set_title(f"NACA0012 vs Optimization", fontsize=16)
+    ax1.set_ylabel("($C_p$)", fontsize=14, fontweight='bold')
+    ax1.set_title(f"NACA0012 vs My_naca0012", fontsize=16)
     ax1.grid(True, linestyle='--', alpha=0.7)
     ax1.invert_yaxis() # Invert Y for Cp
 
@@ -109,20 +110,19 @@ if data_init is not None and data_opt is not None:
     ax2.plot(data_init['x_up'], data_init['y_up'], 'k--', linewidth=1.5)
     ax2.plot(data_init['x_low'], data_init['y_low'], 'k--', linewidth=1.5)
     
-    # Plot Optimized
-    ax2.plot(data_opt['x_up'], data_opt['y_up'], 'g-', linewidth=2)
-    ax2.plot(data_opt['x_low'], data_opt['y_low'], 'g-', linewidth=2)
+    # Plot Optimized (CHANGED COLOR HERE)
+    ax2.plot(data_opt['x_up'], data_opt['y_up'], color='hotpink', linestyle='-', linewidth=2)
+    ax2.plot(data_opt['x_low'], data_opt['y_low'], color='hotpink', linestyle='-', linewidth=2)
 
     # Settings for Geometry plot
     ax2.set_xlabel("($x/c$)", fontsize=14, fontweight='bold')
-    ax2.set_ylabel("($y/c$)", fontsize=14, fontweight='bold')
     ax2.grid(True, linestyle='--', alpha=0.7)
     ax2.axis('equal') # Maintain aspect ratio
     
     # --- Legend ---
     legend_elements = [
         Line2D([0], [0], color='k', linestyle='--', linewidth=1.5, label='NACA0012'),
-        Line2D([0], [0], color='g', linestyle='-', linewidth=2, label='Optimized Design')
+        Line2D([0], [0], color='hotpink', linestyle='-', linewidth=2, label='My_naca0012')
     ]
     ax1.legend(handles=legend_elements, loc='best', fontsize=12)
 

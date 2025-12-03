@@ -68,7 +68,7 @@ if drag_values:
     plt.figure(figsize=(10, 8))
     
     # Plot style: Green line with diamond markers
-    plt.plot(evaluations, drag_values, color='#00FF00', marker='d', 
+    plt.plot(evaluations, drag_values, color='hotpink', marker='s', 
              linestyle='-', markersize=5, linewidth=1.5, label='Drag')
 
     # Axis labels
@@ -82,8 +82,6 @@ if drag_values:
     
     # Set limits
     plt.xlim(0, 33)
-    
-    plt.title('Optimization History: Drag Coefficient')
     image_filename = "Optimization_CD_Graph.png"
     save_path_image = os.path.join(excel_path, image_filename)
     plt.savefig(save_path_image, dpi=300, bbox_inches='tight')
