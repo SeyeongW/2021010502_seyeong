@@ -1,228 +1,195 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
-import re
+import os
 import shutil
 import subprocess
-import sys
-from pathlib import Path
-
-# =========================================================
-# USER SETTINGS
-# =========================================================
-ROOT_DIR = Path(".").resolve()     # 여기(상위 폴더)에서 실행한다고 가정
-CFG1_NAME = "turb1_VR12.cfg"       # 1차 cfg (상위 폴더에 위치)
-CFG2_NAME = "turb2_VR12.cfg"       # 2차 cfg (상위 폴더에 위치)
-MESH_NAME = "VR-12.su2"            # 메쉬 파일 (상위 폴더에 위치)
-
-AOA_START = 0
-AOA_END = 20
-AOA_STEP = 2
-
-MPIEXEC = "mpiexec"
-MPI_N = 8
-SU2_EXE = "SU2_CFD"
-
-STOP_ON_FAILURE = True            # 실패하면 즉시 종료
-
-# 1차 restart 이름은 "restart_flow"로 고정 (2차가 덮어써도 됨)
-RESTART_BASE = "restart_flow"
-
-# 로그에서 이런 문구가 보이면 실패로 판정
-FATAL_PATTERNS = [
-    "FGMRES orthogonalization failed",
-    "linear solver diverged",
-    "Error Exit",
-    "nan",
-    "inf",
-]
-# =========================================================
+import re
+from dataclasses import dataclass
+from typing import Iterable, List, Optional
 
 
-def read_lines(p: Path) -> list[str]:
-    return p.read_text(encoding="utf-8", errors="ignore").splitlines(True)
+# ====================================================
+# Config (edit here)
+# ====================================================
+@dataclass
+class Settings:
+    work_dir: str = r"D:\CFD\SU2_work\Project\VR-12"
+
+    # Inputs
+    base_cfg_name: str = "turb_VR12.cfg"
+    mesh_name: str = "VR-12.su2"
+
+    # AoA sweep
+    aoa_start: int = 0
+    aoa_end_inclusive: int = 20
+    aoa_step: int = 2
+
+    # Case folder naming
+    case_prefix: str = "deg_"          # e.g., deg_0, deg_2 ...
+    case_zero_pad: int = 2             # 2 -> deg_00, deg_02 ...
+
+    # Run command
+    mpi_exec: str = "mpiexec"
+    mpi_ranks: int = 8
+    su2_exec: str = "SU2_CFD"
+    run_cfg_name: str = "run.cfg"
+
+    # Behavior
+    stop_on_failure: bool = True       # 실패하면 break
+    recreate_case_dir: bool = True     # 케이스 폴더가 있으면 삭제 후 재생성
+
+    # Cleanup (optional)
+    do_cleanup: bool = False           # True면 성공 후 필요 파일만 남기고 삭제
+    files_to_keep: List[str] = None    # do_cleanup=True일 때 사용
+
+    # Encoding
+    cfg_encoding: str = "utf-8"
 
 
-def write_lines(p: Path, lines: list[str]) -> None:
-    p.write_text("".join(lines), encoding="utf-8", newline="\n")
+def build_aoa_list(s: Settings) -> List[int]:
+    if s.aoa_step == 0:
+        raise ValueError("aoa_step must not be 0.")
+    if (s.aoa_end_inclusive - s.aoa_start) * s.aoa_step < 0:
+        raise ValueError("aoa_step sign does not move from start to end.")
+    return list(range(s.aoa_start, s.aoa_end_inclusive + (1 if s.aoa_step > 0 else -1), s.aoa_step))
 
 
-def apply_overrides(base_lines: list[str], overrides: dict[str, str]) -> list[str]:
-    """
-    cfg에서 overrides에 있는 KEY= 라인을 제거하고,
-    끝에 KEY= value로 덧붙임.
-    """
-    keys = sorted(overrides.keys(), key=len, reverse=True)
-    key_pattern = "|".join(re.escape(k) for k in keys)
-    drop_re = re.compile(rf"^\s*({key_pattern})\s*=", re.IGNORECASE)
-
-    cleaned = [ln for ln in base_lines if not drop_re.match(ln)]
-    cleaned.append("\n% --- Auto overrides by run_2stage_sweep_folders.py ---\n")
-    for k, v in overrides.items():
-        cleaned.append(f"{k}= {v}\n")
-    return cleaned
+def safe_rmtree(path: str) -> None:
+    if os.path.exists(path):
+        shutil.rmtree(path)
 
 
-def run_cmd_stream(cwd: Path, cmd: list[str]) -> tuple[int, str]:
-    """
-    실행하면서 화면 출력 + 로그 캡처
-    """
-    proc = subprocess.Popen(
-        cmd,
-        cwd=str(cwd),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        text=True,
-        bufsize=1,
-        universal_newlines=True,
-    )
-    log_lines: list[str] = []
-    assert proc.stdout is not None
-    for line in proc.stdout:
-        print(line, end="")
-        log_lines.append(line)
-    ret = proc.wait()
-    return ret, "".join(log_lines)
+def ensure_exists(path: str, kind: str) -> None:
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"{kind} not found: {path}")
 
 
-def log_has_fatal(log_text: str) -> bool:
-    low = log_text.lower()
-    return any(p.lower() in low for p in FATAL_PATTERNS)
+def load_base_cfg_lines(base_cfg_path: str, encoding: str) -> List[str]:
+    with open(base_cfg_path, "r", encoding=encoding, errors="ignore") as f:
+        lines = f.readlines()
+
+    # Remove only AOA and MESH_FILENAME so we can inject per-case values
+    regex_drop = re.compile(r"^\s*(AOA|MESH_FILENAME)\s*=", re.IGNORECASE)
+    clean_lines = [l for l in lines if not regex_drop.match(l)]
+    return clean_lines
 
 
-def find_restart_file(case_dir: Path, base: str) -> Path | None:
-    """
-    SU2 restart 파일 탐색 (restart_flow.dat 등)
-    """
-    candidates = [
-        f"{base}.dat",
-        f"{base}.dat.gz",
-        f"{base}.csv",
-        f"{base}.su2",
-        base,
-    ]
-    for c in candidates:
-        p = case_dir / c
-        if p.is_file():
-            return p
-    for p in case_dir.iterdir():
-        if p.is_file() and p.name.startswith(base):
-            return p
-    return None
+def write_case_cfg(cfg_path: str, base_lines: List[str], aoa: float, mesh_filename: str, encoding: str) -> None:
+    with open(cfg_path, "w", encoding=encoding, newline="\n") as f:
+        f.writelines(base_lines)
+        f.write("\n% --- Auto Generated settings ---\n")
+        f.write(f"AOA= {aoa:.6f}\n")
+        f.write(f"MESH_FILENAME= {mesh_filename}\n")
 
 
-def make_case_folder_name(aoa: int) -> str:
-    # aoa_00, aoa_02 ... aoa_20
-    return f"aoa_{aoa:02d}"
+def cleanup_case_dir(case_dir: str, keep: List[str]) -> None:
+    keep_set = set(keep)
+    for name in os.listdir(case_dir):
+        p = os.path.join(case_dir, name)
+        if name in keep_set:
+            continue
+        try:
+            if os.path.isfile(p) or os.path.islink(p):
+                os.unlink(p)
+            elif os.path.isdir(p):
+                shutil.rmtree(p)
+        except Exception as e:
+            print(f"[WARN] Failed to delete {p}: {e}")
+
+
+def run_one_case(s: Settings, base_lines: List[str], aoa: int) -> bool:
+    case_name = f"{s.case_prefix}{aoa:0{s.case_zero_pad}d}"
+    case_dir = os.path.join(s.work_dir, case_name)
+
+    # (1) Prepare folder
+    if s.recreate_case_dir:
+        safe_rmtree(case_dir)
+    os.makedirs(case_dir, exist_ok=True)
+
+    # (2) Copy mesh
+    src_mesh = os.path.join(s.work_dir, s.mesh_name)
+    dst_mesh = os.path.join(case_dir, s.mesh_name)
+    shutil.copy(src_mesh, dst_mesh)
+
+    # (3) Write cfg
+    cfg_path = os.path.join(case_dir, s.run_cfg_name)
+    write_case_cfg(cfg_path, base_lines, float(aoa), s.mesh_name, s.cfg_encoding)
+
+    # (4) Run SU2
+    cmd = [s.mpi_exec, "-n", str(s.mpi_ranks), s.su2_exec, s.run_cfg_name]
+
+    print("====================================================")
+    print(f"[AoA {aoa:>3d} deg] folder: {case_name}")
+    print("====================================================")
+    print(f"[CMD] {' '.join(cmd)}")
+    print()
+
+    try:
+        subprocess.run(cmd, cwd=case_dir, check=True)
+        print(f"\n[SUCCESS] AoA={aoa} finished.\n")
+
+        # (5) Optional cleanup
+        if s.do_cleanup:
+            if not s.files_to_keep:
+                raise ValueError("do_cleanup=True but files_to_keep is empty.")
+            print("[INFO] Cleaning up files...")
+            cleanup_case_dir(case_dir, s.files_to_keep)
+            print("[INFO] Cleanup done.\n")
+
+        return True
+
+    except subprocess.CalledProcessError as e:
+        print(f"\n[FAIL] AoA={aoa} failed (returncode={e.returncode}).\n")
+        return False
 
 
 def main():
-    cfg1_path = ROOT_DIR / CFG1_NAME
-    cfg2_path = ROOT_DIR / CFG2_NAME
-    mesh_path = ROOT_DIR / MESH_NAME
+    s = Settings(
+        # 너가 원하면 여기서 바로 덮어써도 됨
+        work_dir=r"D:\CFD\SU2_work\Project\VR-12",
+        base_cfg_name="turb_VR12.cfg",
+        mesh_name="VR-12.su2",
 
-    if not cfg1_path.is_file():
-        print(f"[ERROR] Missing cfg1: {cfg1_path}")
-        sys.exit(1)
-    if not cfg2_path.is_file():
-        print(f"[ERROR] Missing cfg2: {cfg2_path}")
-        sys.exit(1)
-    if not mesh_path.is_file():
-        print(f"[ERROR] Missing mesh: {mesh_path}")
-        sys.exit(1)
+        aoa_start=0,
+        aoa_end_inclusive=20,
+        aoa_step=2,
 
-    base1 = read_lines(cfg1_path)
-    base2 = read_lines(cfg2_path)
+        mpi_exec="mpiexec",
+        mpi_ranks=8,
+        su2_exec="SU2_CFD",
 
-    angles = list(range(AOA_START, AOA_END + 1, AOA_STEP))
+        stop_on_failure=True,
+        recreate_case_dir=True,
+
+        # 성공한 폴더에서 결과 파일만 남기고 싶으면 True로
+        do_cleanup=False,
+        files_to_keep=["history.csv", "flow.vtu", "surface_flow.vtu", "surface.vtu", "restart_flow.dat"],
+    )
+
+    mesh_path = os.path.join(s.work_dir, s.mesh_name)
+    base_cfg_path = os.path.join(s.work_dir, s.base_cfg_name)
+
+    ensure_exists(mesh_path, "Mesh file")
+    ensure_exists(base_cfg_path, "Base cfg file")
+
+    base_lines = load_base_cfg_lines(base_cfg_path, s.cfg_encoding)
+    aoa_list = build_aoa_list(s)
 
     print("====================================================")
-    print("[INFO] SU2 2-stage sweep (folder-per-angle)")
-    print(f"[INFO] root: {ROOT_DIR}")
-    print(f"[INFO] mesh: {MESH_NAME}")
-    print(f"[INFO] cfg1: {CFG1_NAME}")
-    print(f"[INFO] cfg2: {CFG2_NAME}")
-    print(f"[INFO] angles: {angles}")
-    print(f"[INFO] mpi: {MPIEXEC} -n {MPI_N}")
-    print(f"[INFO] stop-on-failure: {STOP_ON_FAILURE}")
+    print("[INFO] SU2 AoA sweep (folder-per-angle)")
+    print(f"[INFO] root: {s.work_dir}")
+    print(f"[INFO] mesh: {s.mesh_name}")
+    print(f"[INFO] base cfg: {s.base_cfg_name}")
+    print(f"[INFO] angles: {aoa_list}")
+    print(f"[INFO] mpi: {s.mpi_exec} -n {s.mpi_ranks}")
+    print(f"[INFO] stop-on-failure: {s.stop_on_failure}")
     print("====================================================\n")
 
-    for aoa in angles:
-        case_name = make_case_folder_name(aoa)
-        case_dir = ROOT_DIR / case_name
-        case_dir.mkdir(parents=True, exist_ok=True)
+    for aoa in aoa_list:
+        ok = run_one_case(s, base_lines, aoa)
+        if not ok and s.stop_on_failure:
+            print("[STOP] Abort all CFD runs now.")
+            break
 
-        # 폴더 안에 mesh/cfg 템플릿 복사 (원래 방식대로 “각 폴더에서 완결”)
-        shutil.copy2(mesh_path, case_dir / MESH_NAME)
-
-        # Stage1 cfg 생성 (폴더 안에서 실행)
-        stage1_cfg = case_dir / "run_stage1.cfg"
-        ov1 = {
-            "AOA": str(float(aoa)),
-            "MESH_FILENAME": MESH_NAME,
-            "RESTART_SOL": "NO",
-            "RESTART_FILENAME": RESTART_BASE,
-        }
-        write_lines(stage1_cfg, apply_overrides(base1, ov1))
-
-        # Stage2 cfg 생성
-        stage2_cfg = case_dir / "run_stage2.cfg"
-        # (SOLUTION_FILENAME는 stage1 실행 후 restart 파일명을 확인해서 넣음)
-
-        print("\n====================================================")
-        print(f"[AoA {aoa:2d} deg] folder: {case_dir.name}")
-        print("====================================================")
-
-        # ---------------- Stage 1 ----------------
-        print("\n---------------- STAGE 1 ----------------")
-        cmd1 = [MPIEXEC, "-n", str(MPI_N), SU2_EXE, stage1_cfg.name]
-        ret1, log1 = run_cmd_stream(case_dir, cmd1)
-
-        if ret1 != 0 or log_has_fatal(log1):
-            print(f"\n[FAIL] Stage1 failed at AoA={aoa} deg (ret={ret1})")
-            if STOP_ON_FAILURE:
-                print("[STOP] Abort all CFD runs now.")
-                sys.exit(1)
-            else:
-                break
-
-        rst1_file = find_restart_file(case_dir, RESTART_BASE)
-        if rst1_file is None:
-            print(f"\n[FAIL] Stage1 finished but restart file not found: {RESTART_BASE}.*")
-            if STOP_ON_FAILURE:
-                print("[STOP] Abort all CFD runs now.")
-                sys.exit(1)
-            else:
-                break
-
-        print(f"\n[OK] Stage1 success. restart: {rst1_file.name}")
-        print("NOTE: Stage2 will overwrite flow/surface/history in this folder (as requested).")
-
-        # ---------------- Stage 2 ----------------
-        print("\n---------------- STAGE 2 ----------------")
-        ov2 = {
-            "AOA": str(float(aoa)),
-            "MESH_FILENAME": MESH_NAME,
-            "RESTART_SOL": "YES",
-            "SOLUTION_FILENAME": rst1_file.name,   # Stage1 restart에서 시작
-            "RESTART_FILENAME": RESTART_BASE,      # Stage2도 같은 이름으로 restart 저장 (덮어씀)
-        }
-        write_lines(stage2_cfg, apply_overrides(base2, ov2))
-
-        cmd2 = [MPIEXEC, "-n", str(MPI_N), SU2_EXE, stage2_cfg.name]
-        ret2, log2 = run_cmd_stream(case_dir, cmd2)
-
-        if ret2 != 0 or log_has_fatal(log2):
-            print(f"\n[FAIL] Stage2 failed at AoA={aoa} deg (ret={ret2})")
-            if STOP_ON_FAILURE:
-                print("[STOP] Abort all CFD runs now.")
-                sys.exit(1)
-            else:
-                break
-
-        print(f"\n[SUCCESS] AoA={aoa} deg finished (Stage2 overwrote Stage1 outputs in {case_dir.name}).")
-
-    print("\n[DONE] Sweep finished.")
+    print("Done.")
 
 
 if __name__ == "__main__":
